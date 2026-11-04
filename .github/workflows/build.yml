@@ -1,0 +1,47 @@
+name: Build APK from zip
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.7
+
+      - name: Unzip project
+        run: |
+          ZIP=$(find . -maxdepth 1 -name "*.zip" | head -1)
+          if [ -z "$ZIP" ]; then
+            echo "找不到 zip 檔，請把專案壓縮檔上傳到 repo 根目錄"
+            exit 1
+          fi
+          echo "使用 $ZIP"
+          mkdir -p "$RUNNER_TEMP/proj"
+          unzip -q "$ZIP" -d "$RUNNER_TEMP/proj"
+          SETTINGS=$(find "$RUNNER_TEMP/proj" -name settings.gradle | head -1)
+          if [ -z "$SETTINGS" ]; then
+            echo "zip 裡找不到 settings.gradle，請確認壓縮檔內容"
+            exit 1
+          fi
+          echo "PROJ_DIR=$(dirname "$SETTINGS")" >> "$GITHUB_ENV"
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJ_DIR"
+          gradle assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StatusBarLock-debug-apk
+          path: ${{ env.PROJ_DIR }}/app/build/outputs/apk/debug/*.apk
